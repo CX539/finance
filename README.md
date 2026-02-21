@@ -9,23 +9,26 @@ This plugin extends Dokan so sellers can choose and configure extra preferred wi
 
 ## What this version adds
 
-- Adds **M-Pesa** as a Dokan withdrawal method with an icon (`assets/mpesa-logo.svg`).
-- Vendors can save **M-Pesa phone number** in their payment settings.
+- Adds **M-Pesa** as a Dokan withdrawal method with icon support.
+- Vendors can save **M-Pesa account name + phone number**.
 - Vendors can set a **Preferred Withdrawal Method** from currently active Dokan withdrawal methods.
-- If no preferred method is selected, Dokan default behavior remains in place.
-- Admin can view/edit vendor **M-Pesa phone number** and **preferred method** in WordPress admin profile for vendor users.
+- Keeps Dokan default behavior if no preferred method is selected.
+- Admin can view/edit vendor withdrawal data from WordPress profile pages.
+- Syncs vendor `dokan_withdraw_methods` meta so Dokan marks M-Pesa as connected when details are saved.
 
-## Expected behavior in Dokan
+## Technical notes
 
-- In **Dokan → Settings → Withdraw Options**, M-Pesa appears as a method and can be toggled on/off.
-- When enabled, vendors can configure M-Pesa in frontend payment settings.
-- During manual withdrawal review, admin can inspect the selected method in Dokan request data and can also verify/update vendor M-Pesa details in admin profile.
+- Registers method via `dokan_withdraw_methods` filter.
+- Persists values into `dokan_profile_settings`.
+- Syncs connected status with `dokan_withdraw_methods` user meta.
+- Includes compatibility hooks for multiple Dokan admin save events.
 
 ## Installation
 
-1. Put files under `wp-content/plugins/dokan-preferred-withdrawal-methods/`.
-2. Activate plugin in WordPress.
-3. Go to Dokan withdraw settings and enable M-Pesa.
+1. Place files in `wp-content/plugins/dokan-preferred-withdrawal-methods/`.
+2. Activate plugin.
+3. Enable M-Pesa from **Dokan → Settings → Withdraw Options**.
+4. Ask vendor to save M-Pesa details from their dashboard payment settings.
 
 ## Extend methods
 
