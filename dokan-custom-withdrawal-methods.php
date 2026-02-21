@@ -6,6 +6,9 @@
  * Version: 1.2.0
  * Author: Forge Tara
  * Author URI: https://forgetara.com/
+ * Text Domain: finance
+ * Requires at least: 6.0
+ * Requires PHP: 7.4
  * Requires Plugins: dokan-lite
  */
 
@@ -171,6 +174,7 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
         $enabled_methods  = $this->get_enabled_withdraw_methods();
         ?>
         <h2><?php esc_html_e( 'Dokan Withdrawal Preferences', 'finance' ); ?></h2>
+        <?php wp_nonce_field( 'finance_save_vendor_withdraw_fields', 'finance_vendor_withdraw_nonce' ); ?>
         <table class="form-table" role="presentation">
             <tr>
                 <th><label for="finance_admin_mpesa_phone"><?php esc_html_e( 'M-Pesa Phone Number', 'finance' ); ?></label></th>
@@ -208,6 +212,12 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
         }
 
         if ( ! current_user_can( 'edit_user', $user_id ) ) {
+            return;
+        }
+
+        $nonce = $_POST['finance_vendor_withdraw_nonce'] ?? '';
+
+        if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $nonce ) ), 'finance_save_vendor_withdraw_fields' ) ) {
             return;
         }
 
