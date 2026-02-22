@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="M-Pesa">
+  <circle cx="128" cy="128" r="128" fill="#08A43D"/>
+  <path d="M0 128h128l128 128H0z" fill="#067a31" opacity="0.9"/>
+  <rect x="95" y="62" width="48" height="108" rx="8" fill="#7ad24b"/>
+  <rect x="111" y="68" width="16" height="6" fill="#5dab3a"/>
+  <polygon points="93,114 136,104 159,112 136,123" fill="#E6182D"/>
+  <text x="30" y="150" font-family="Arial, Helvetica, sans-serif" font-size="62" font-weight="700" fill="#fff">M</text>
+  <text x="150" y="150" font-family="Arial, Helvetica, sans-serif" font-size="62" font-weight="700" fill="#fff">PESA</text>
+</svg>
