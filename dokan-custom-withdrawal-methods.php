@@ -46,6 +46,16 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
         add_action( 'dokan_seller_profile_saved', [ $this, 'save_vendor_payment_details' ], 20, 2 );
         add_action( 'template_redirect', [ $this, 'maybe_capture_vendor_payment_submit' ], 20 );
 
+        // Vendor Payment settings listing compatibility hooks.
+        add_filter( 'dokan_get_seller_payment_methods', [ $this, 'ensure_mpesa_in_vendor_payment_methods' ], 20, 2 );
+        add_filter( 'dokan_seller_payment_methods', [ $this, 'ensure_mpesa_in_vendor_payment_methods' ], 20, 2 );
+        add_filter( 'dokan_payment_methods', [ $this, 'ensure_mpesa_in_vendor_payment_methods' ], 20, 2 );
+
+        // Withdraw request context: persist MPesa number with request and expose in admin views.
+        add_action( 'dokan_withdraw_request_submitted', [ $this, 'save_withdraw_request_mpesa_snapshot' ], 20, 4 );
+        add_action( 'dokan_after_withdraw_request_submit', [ $this, 'save_withdraw_request_mpesa_snapshot' ], 20, 4 );
+        add_filter( 'dokan_get_all_withdraw', [ $this, 'append_mpesa_to_withdraw_records' ], 20, 1 );
+
         // WordPress user profile admin page.
         add_action( 'show_user_profile', [ $this, 'render_admin_vendor_fields' ] );
         add_action( 'edit_user_profile', [ $this, 'render_admin_vendor_fields' ] );
@@ -496,6 +506,149 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
         return $methods;
     }
 
+
+
+    /**
+     * Ensure MPesa appears in vendor Payment settings methods list.
+     *
+     * @param array $methods Existing payment methods.
+     * @param int   $seller_id Optional seller ID.
+     * @return array
+     */
+    public function ensure_mpesa_in_vendor_payment_methods( $methods, $seller_id = 0 ) {
+        $methods   = is_array( $methods ) ? $methods : [];
+        $seller_id = (int) $seller_id;
+
+        if ( $seller_id <= 0 ) {
+            $seller_id = get_current_user_id();
+        }
+
+        if ( $seller_id <= 0 ) {
+            return $methods;
+        }
+
+        $profile_settings = dokan_get_store_info( $seller_id );
+        $payment_settings = $profile_settings['payment'] ?? [];
+        $mpesa_number     = sanitize_text_field( $payment_settings['mpesa']['account_number'] ?? '' );
+
+        if ( '' === $mpesa_number ) {
+            return $methods;
+        }
+
+        $custom_methods = $this->get_custom_methods();
+
+        if ( isset( $custom_methods['mpesa'] ) && empty( $methods['mpesa'] ) ) {
+            $methods['mpesa'] = [
+                'title' => $custom_methods['mpesa']['label'],
+                'icon'  => $custom_methods['mpesa']['icon'] ?? '',
+            ];
+        }
+
+        return $methods;
+    }
+
+    /**
+     * Save MPesa number snapshot on withdraw request so admin can see it later.
+     *
+     * @param mixed $arg1 Request ID or user ID depending on Dokan version.
+     * @param mixed $arg2 User ID or amount.
+     * @param mixed $arg3 Amount or method.
+     * @param mixed $arg4 Method key or unused.
+     */
+    public function save_withdraw_request_mpesa_snapshot( $arg1 = null, $arg2 = null, $arg3 = null, $arg4 = null ) {
+        $request_id = 0;
+        $user_id    = 0;
+        $method     = '';
+
+        if ( is_numeric( $arg1 ) && is_numeric( $arg2 ) ) {
+            $request_id = (int) $arg1;
+            $user_id    = (int) $arg2;
+            $method     = is_string( $arg4 ) ? sanitize_key( $arg4 ) : ( is_string( $arg3 ) ? sanitize_key( $arg3 ) : '' );
+        } elseif ( is_numeric( $arg1 ) ) {
+            $user_id = (int) $arg1;
+            $method  = is_string( $arg3 ) ? sanitize_key( $arg3 ) : ( is_string( $arg2 ) ? sanitize_key( $arg2 ) : '' );
+        }
+
+        if ( 'mpesa' !== $method && isset( $_POST['withdraw_method'] ) ) {
+            $method = sanitize_key( wp_unslash( $_POST['withdraw_method'] ) );
+        }
+
+        if ( $user_id <= 0 ) {
+            $user_id = get_current_user_id();
+        }
+
+        if ( $user_id <= 0 || 'mpesa' !== $method ) {
+            return;
+        }
+
+        $profile_settings = dokan_get_store_info( $user_id );
+        $payment_settings = $profile_settings['payment'] ?? [];
+        $mpesa_number     = sanitize_text_field( $payment_settings['mpesa']['account_number'] ?? '' );
+
+        if ( '' === $mpesa_number ) {
+            return;
+        }
+
+        update_user_meta( $user_id, 'finance_last_withdraw_mpesa_number', $mpesa_number );
+
+        if ( $request_id > 0 ) {
+            update_post_meta( $request_id, '_finance_mpesa_number', $mpesa_number );
+        }
+    }
+
+    /**
+     * Append mpesa number to withdraw request rows for admin listing compatibility.
+     *
+     * @param array $withdraws Withdraw records.
+     * @return array
+     */
+    public function append_mpesa_to_withdraw_records( $withdraws ) {
+        if ( ! is_array( $withdraws ) ) {
+            return $withdraws;
+        }
+
+        foreach ( $withdraws as $index => $withdraw ) {
+            $method = '';
+            $user_id = 0;
+            $request_id = 0;
+
+            if ( is_object( $withdraw ) ) {
+                $method     = sanitize_key( $withdraw->method ?? '' );
+                $user_id    = (int) ( $withdraw->user_id ?? 0 );
+                $request_id = (int) ( $withdraw->id ?? 0 );
+            } elseif ( is_array( $withdraw ) ) {
+                $method     = sanitize_key( $withdraw['method'] ?? '' );
+                $user_id    = (int) ( $withdraw['user_id'] ?? 0 );
+                $request_id = (int) ( $withdraw['id'] ?? 0 );
+            }
+
+            if ( 'mpesa' !== $method ) {
+                continue;
+            }
+
+            $number = '';
+            if ( $request_id > 0 ) {
+                $number = sanitize_text_field( get_post_meta( $request_id, '_finance_mpesa_number', true ) );
+            }
+
+            if ( '' === $number && $user_id > 0 ) {
+                $profile_settings = dokan_get_store_info( $user_id );
+                $number = sanitize_text_field( $profile_settings['payment']['mpesa']['account_number'] ?? '' );
+            }
+
+            if ( is_object( $withdraw ) ) {
+                $withdraw->method_title  = trim( ( $withdraw->method_title ?? 'M-Pesa' ) . ( $number ? ' (' . $number . ')' : '' ) );
+                $withdraw->mpesa_number  = $number;
+                $withdraws[ $index ] = $withdraw;
+            } elseif ( is_array( $withdraw ) ) {
+                $withdraw['method_title'] = trim( ( $withdraw['method_title'] ?? 'M-Pesa' ) . ( $number ? ' (' . $number . ')' : '' ) );
+                $withdraw['mpesa_number'] = $number;
+                $withdraws[ $index ] = $withdraw;
+            }
+        }
+
+        return $withdraws;
+    }
 
     /**
      * Normalize method list from either indexed or associative format.

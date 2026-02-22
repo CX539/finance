@@ -11,10 +11,12 @@ This plugin extends Dokan so sellers can choose and configure extra preferred wi
 
 - Adds **M-Pesa** as a Dokan withdrawal method with icon support.
 - Vendors can save **M-Pesa account name + phone number**.
+- Vendors can see **M-Pesa** in Payment Methods list when details are saved.
 - Vendors can set a **Preferred Withdrawal Method** from currently active Dokan withdrawal methods.
 - Keeps Dokan default behavior if no preferred method is selected.
 - Admin can view/edit vendor withdrawal data from WordPress profile pages.
 - Syncs vendor `dokan_withdraw_methods` meta so Dokan marks M-Pesa as connected when details are saved.
+- Admin withdraw records include M-Pesa number snapshot for MPesa withdrawal requests.
 
 ## Technical notes
 
