@@ -41,6 +41,7 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
 
         // Vendor dashboard.
         add_filter( 'dokan_withdraw_methods', [ $this, 'register_withdraw_methods' ] );
+        add_filter( 'dokan_get_seller_active_withdraw_methods', [ $this, 'ensure_custom_methods_in_active_list' ], 20, 2 );
         add_action( 'dokan_store_profile_saved', [ $this, 'save_vendor_payment_details' ], 20, 2 );
 
         // WordPress user profile admin page.
@@ -365,10 +366,12 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
             $active = [];
         }
 
-        foreach ( $this->get_custom_methods() as $method_key => $method ) {
-            $account_number = $payment_settings[ $method_key ]['account_number'] ?? '';
+        $active = $this->normalize_method_list( $active );
 
-            if ( ! empty( $account_number ) ) {
+        foreach ( $this->get_custom_methods() as $method_key => $method ) {
+            $account_number = sanitize_text_field( $payment_settings[ $method_key ]['account_number'] ?? '' );
+
+            if ( '' !== $account_number ) {
                 if ( ! in_array( $method_key, $active, true ) ) {
                     $active[] = $method_key;
                 }
@@ -385,6 +388,32 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
         }
 
         update_user_meta( $user_id, 'dokan_withdraw_methods', $active );
+        // Extra compatibility for some Dokan builds/integrations using underscored key.
+        update_user_meta( $user_id, '_dokan_withdraw_methods', $active );
+    }
+
+    /**
+     * Ensure saved custom methods appear in Dokan active method list.
+     *
+     * @param array $methods Existing active methods.
+     * @param int   $user_id Vendor user ID.
+     * @return array
+     */
+    public function ensure_custom_methods_in_active_list( $methods, $user_id ) {
+        $methods = $this->normalize_method_list( $methods );
+
+        $profile_settings = dokan_get_store_info( (int) $user_id );
+        $payment_settings = $profile_settings['payment'] ?? [];
+
+        foreach ( $this->get_custom_methods() as $method_key => $method ) {
+            $account_number = sanitize_text_field( $payment_settings[ $method_key ]['account_number'] ?? '' );
+
+            if ( '' !== $account_number && ! in_array( $method_key, $methods, true ) ) {
+                $methods[] = $method_key;
+            }
+        }
+
+        return array_values( array_unique( $methods ) );
     }
 
     /**
@@ -408,6 +437,31 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
         }
 
         return $methods;
+    }
+
+
+    /**
+     * Normalize method list from either indexed or associative format.
+     *
+     * @param mixed $methods Method list from Dokan/user meta.
+     * @return array<int,string>
+     */
+    private function normalize_method_list( $methods ) {
+        if ( ! is_array( $methods ) ) {
+            return [];
+        }
+
+        $is_assoc = array_keys( $methods ) !== range( 0, count( $methods ) - 1 );
+        $list     = $is_assoc ? array_keys( $methods ) : $methods;
+
+        $list = array_filter(
+            array_map( 'sanitize_key', $list ),
+            static function( $value ) {
+                return '' !== $value;
+            }
+        );
+
+        return array_values( array_unique( $list ) );
     }
 
     /**

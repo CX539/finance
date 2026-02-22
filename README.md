@@ -43,3 +43,11 @@ add_filter( 'finance_dokan_preferred_withdraw_methods', function( $methods ) {
     return $methods;
 } );
 ```
+
+## Troubleshooting (M-Pesa saved but not listed)
+
+If vendors save M-Pesa details but it does not appear in the Withdraw "Payment Methods" list, the usual cause is Dokan not seeing the method as active for that vendor. This plugin now:
+
+- saves M-Pesa in `dokan_profile_settings[payment][mpesa]`
+- syncs vendor method flags in both `dokan_withdraw_methods` and `_dokan_withdraw_methods`
+- injects custom methods into Dokan active-method resolution via `dokan_get_seller_active_withdraw_methods` when account number is present
