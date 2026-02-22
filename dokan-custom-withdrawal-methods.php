@@ -43,6 +43,8 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
         add_filter( 'dokan_withdraw_methods', [ $this, 'register_withdraw_methods' ] );
         add_filter( 'dokan_get_seller_active_withdraw_methods', [ $this, 'ensure_custom_methods_in_active_list' ], 20, 2 );
         add_action( 'dokan_store_profile_saved', [ $this, 'save_vendor_payment_details' ], 20, 2 );
+        add_action( 'dokan_seller_profile_saved', [ $this, 'save_vendor_payment_details' ], 20, 2 );
+        add_action( 'template_redirect', [ $this, 'maybe_capture_vendor_payment_submit' ], 20 );
 
         // WordPress user profile admin page.
         add_action( 'show_user_profile', [ $this, 'render_admin_vendor_fields' ] );
@@ -169,16 +171,14 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
      * @param int   $store_id       Vendor user ID.
      * @param array $dokan_settings Current stored settings passed by Dokan.
      */
-    public function save_vendor_payment_details( $store_id, $dokan_settings ) {
+    public function save_vendor_payment_details( $store_id, $dokan_settings = [] ) {
         $store_id = (int) $store_id;
 
         if ( $store_id <= 0 ) {
             return;
         }
 
-        $posted_payment = isset( $_POST['settings']['payment'] ) && is_array( $_POST['settings']['payment'] )
-            ? wp_unslash( $_POST['settings']['payment'] )
-            : [];
+        $posted_payment = $this->extract_posted_payment_payload();
 
         if ( empty( $posted_payment ) ) {
             return;
@@ -190,8 +190,8 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
             $posted_method = $posted_payment[ $method_key ] ?? [];
 
             $payment[ $method_key ] = [
-                'account_name'   => sanitize_text_field( $posted_method['account_name'] ?? '' ),
-                'account_number' => sanitize_text_field( $posted_method['account_number'] ?? '' ),
+                'account_name'   => sanitize_text_field( $posted_method['account_name'] ?? ( $posted_method['name'] ?? '' ) ),
+                'account_number' => sanitize_text_field( $posted_method['account_number'] ?? ( $posted_method['phone'] ?? ( $posted_method['number'] ?? '' ) ) ),
             ];
         }
 
@@ -351,6 +351,63 @@ final class Finance_Dokan_Preferred_Withdrawal_Methods {
         update_user_meta( $user_id, 'dokan_profile_settings', $profile_settings );
 
         $this->sync_dokan_active_methods( $user_id, $payment_settings );
+    }
+
+
+    /**
+     * Fallback capture for Dokan payment settings submissions on builds where
+     * the expected save action hook is not fired.
+     */
+    public function maybe_capture_vendor_payment_submit() {
+        if ( is_admin() || ! is_user_logged_in() ) {
+            return;
+        }
+
+        $posted_payment = $this->extract_posted_payment_payload();
+
+        if ( empty( $posted_payment ) ) {
+            return;
+        }
+
+        $user_id = get_current_user_id();
+
+        if ( $user_id <= 0 ) {
+            return;
+        }
+
+        $user = get_user_by( 'id', $user_id );
+
+        if ( ! $user || ! $this->is_vendor( $user ) ) {
+            return;
+        }
+
+        $store_info = dokan_get_store_info( $user_id );
+        $this->save_vendor_payment_details( $user_id, is_array( $store_info ) ? $store_info : [] );
+    }
+
+    /**
+     * Extract posted payment payload from different Dokan form variants.
+     *
+     * @return array
+     */
+    private function extract_posted_payment_payload() {
+        if ( ! empty( $_POST['settings']['payment'] ) && is_array( $_POST['settings']['payment'] ) ) {
+            return wp_unslash( $_POST['settings']['payment'] );
+        }
+
+        if ( ! empty( $_POST['payment'] ) && is_array( $_POST['payment'] ) ) {
+            return wp_unslash( $_POST['payment'] );
+        }
+
+        if ( ! empty( $_POST['dokan_payment'] ) && is_array( $_POST['dokan_payment'] ) ) {
+            return wp_unslash( $_POST['dokan_payment'] );
+        }
+
+        if ( ! empty( $_POST['mpesa'] ) && is_array( $_POST['mpesa'] ) ) {
+            return [ 'mpesa' => wp_unslash( $_POST['mpesa'] ) ];
+        }
+
+        return [];
     }
 
     /**

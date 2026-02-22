@@ -22,6 +22,7 @@ This plugin extends Dokan so sellers can choose and configure extra preferred wi
 - Persists values into `dokan_profile_settings`.
 - Syncs connected status with `dokan_withdraw_methods` user meta.
 - Includes compatibility hooks for multiple Dokan admin save events.
+- Includes vendor-save fallback capture for Dokan payment form variants when core save hooks differ by version.
 
 ## Installation
 
